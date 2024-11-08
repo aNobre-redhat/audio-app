@@ -1,15 +1,16 @@
 import os
+import openai
 import boto3
 from flask import Flask, request, jsonify, render_template, redirect, url_for
-import openai
 from datetime import datetime
+from io import BytesIO
 
 app = Flask(__name__)
 
-# Configuração da API OpenAI usando variável de ambiente para a chave de API
+# Configuração da API OpenAI
 openai.api_key = os.getenv("OPENAI_API_KEY")
 
-# Configuração do cliente S3 do NooBaa usando variáveis de ambiente
+# Configuração do cliente S3 do NooBaa
 s3 = boto3.client(
     's3',
     endpoint_url=os.getenv('S3_ENDPOINT_URL'),
@@ -18,7 +19,7 @@ s3 = boto3.client(
     verify=True  # SSL ativado para o endpoint HTTPS
 )
 
-# Nome do bucket S3 definido como variável de ambiente no Deployment
+# Nome do bucket S3
 bucket_name = os.getenv("BUCKET_NAME")
 
 @app.route("/")
@@ -41,15 +42,26 @@ def generate_audio():
     if not text:
         return jsonify({"error": "Texto não fornecido"}), 400
 
-    # Gera o áudio usando a API do Whisper da OpenAI
+    # Gera o texto usando o modelo GPT-4o
     try:
-        response = openai.Audio.create(
-            text=text,
-            model="whisper-1"
+        response = openai.ChatCompletion.create(
+            model="gpt-4o",
+            messages=[{"role": "user", "content": text}]
         )
-        audio_content = response["data"]
+        generated_text = response["choices"][0]["message"]["content"]
     except Exception as e:
-        return jsonify({"error": f"Erro ao gerar áudio: {str(e)}"}), 500
+        return jsonify({"error": f"Erro ao gerar texto com GPT-4o: {str(e)}"}), 500
+
+    # Converte o texto em áudio usando a API de TTS da OpenAI
+    try:
+        audio_response = openai.Audio.create(
+            model="tts-1",
+            input=generated_text,
+            voice="alloy"
+        )
+        audio_data = audio_response["data"]
+    except Exception as e:
+        return jsonify({"error": f"Erro ao converter texto em áudio: {str(e)}"}), 500
 
     # Cria um nome de arquivo único com timestamp
     timestamp = datetime.utcnow().strftime("%Y%m%d%H%M%S")
@@ -60,7 +72,8 @@ def generate_audio():
         s3.put_object(
             Bucket=bucket_name,
             Key=filename,
-            Body=audio_content
+            Body=BytesIO(audio_data),
+            ContentType="audio/mpeg"
         )
     except Exception as e:
         return jsonify({"error": f"Erro ao fazer upload para o bucket S3: {str(e)}"}), 500
