@@ -46,20 +46,17 @@ def generate_audio():
     try:
         response = openai.ChatCompletion.create(
             model="gpt-4o",
-            messages=[
-                {"role": "system", "content": "Você é um assistente útil."},
-                {"role": "user", "content": text}
-            ]
+            messages=[{"role": "user", "content": text}]
         )
         generated_text = response.choices[0].message['content'].strip()
     except Exception as e:
         return jsonify({"error": f"Erro ao gerar texto com GPT-4o: {str(e)}"}), 500
 
-    # Converte o texto em áudio usando a API de TTS da OpenAI
+    # Converte o texto em áudio usando a API Whisper
     try:
         audio_response = openai.Audio.create(
             input=generated_text,
-            model="whisper-tts-1"
+            model="whisper-1"
         )
         audio_data = audio_response['data']
     except Exception as e:
