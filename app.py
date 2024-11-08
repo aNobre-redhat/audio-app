@@ -17,7 +17,7 @@ s3 = boto3.client(
     endpoint_url=os.getenv('S3_ENDPOINT_URL'),
     aws_access_key_id=os.getenv('AWS_ACCESS_KEY_ID'),
     aws_secret_access_key=os.getenv('AWS_SECRET_ACCESS_KEY'),
-    verify=True  # SSL ativado para o endpoint HTTPS
+    verify=False  # Desativa a verificação de SSL
 )
 
 # Nome do bucket S3
