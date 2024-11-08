@@ -1,10 +1,10 @@
 import os
+import openai
 import boto3
-from flask import Flask, request, jsonify, render_template, redirect, url_for
+from flask import Flask, request, jsonify, render_template, redirect, url_for, Response
 from datetime import datetime
 from io import BytesIO
 from pathlib import Path
-from openai import OpenAI
 
 app = Flask(__name__)
 
@@ -17,7 +17,7 @@ s3 = boto3.client(
     endpoint_url=os.getenv('S3_ENDPOINT_URL'),
     aws_access_key_id=os.getenv('AWS_ACCESS_KEY_ID'),
     aws_secret_access_key=os.getenv('AWS_SECRET_ACCESS_KEY'),
-    verify=False  # Desativa a verificação de SSL
+    verify=False  # Desativa a verificação de SSL para certificados autoassinados
 )
 
 # Nome do bucket S3
@@ -45,17 +45,12 @@ def generate_audio():
 
     # Converte o texto em áudio usando o TTS da OpenAI
     try:
-        # Caminho temporário para salvar o arquivo de áudio
         speech_file_path = Path("/tmp") / "speech.mp3"
-        
-        # Converte o texto em áudio usando a API de TTS da OpenAI
         response = client.audio.speech.create(
             model="tts-1",
             voice="alloy",
             input=text
         )
-        
-        # Salva o áudio no caminho temporário
         response.stream_to_file(speech_file_path)
 
         # Lê o conteúdo do arquivo de áudio para upload no S3
@@ -83,17 +78,26 @@ def generate_audio():
 
 @app.route("/play-audio/<filename>", methods=["GET"])
 def play_audio(filename):
-    # Gera uma URL de download temporária para o arquivo no bucket S3
+    # Gera o conteúdo do áudio diretamente para o navegador
     try:
-        url = s3.generate_presigned_url(
-            'get_object',
-            Params={'Bucket': bucket_name, 'Key': filename},
-            ExpiresIn=3600  # URL expira em 1 hora
+        audio_obj = s3.get_object(Bucket=bucket_name, Key=filename)
+        return Response(
+            audio_obj["Body"].read(),
+            content_type="audio/mpeg",
+            headers={"Content-Disposition": f'inline; filename="{filename}"'}
         )
     except Exception as e:
-        return jsonify({"error": f"Erro ao gerar URL: {str(e)}"}), 500
+        return jsonify({"error": f"Erro ao obter áudio: {str(e)}"}), 500
 
-    return redirect(url)
+@app.route("/delete-audio/<filename>", methods=["POST"])
+def delete_audio(filename):
+    # Exclui o áudio do bucket S3
+    try:
+        s3.delete_object(Bucket=bucket_name, Key=filename)
+    except Exception as e:
+        return jsonify({"error": f"Erro ao excluir áudio: {str(e)}"}), 500
+
+    return redirect(url_for("index"))
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=8080, debug=True)

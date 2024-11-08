@@ -18,7 +18,14 @@
     <ul>
         {% for audio in audio_files %}
             <li>
-                {{ audio }} - <a href="{{ url_for('play_audio', filename=audio) }}" target="_blank">Ouvir</a>
+                <strong>{{ audio }}</strong><br>
+                <audio controls>
+                    <source src="{{ url_for('play_audio', filename=audio) }}" type="audio/mpeg">
+                    Seu navegador não suporta o elemento de áudio.
+                </audio>
+                <form action="{{ url_for('delete_audio', filename=audio) }}" method="post" style="display:inline;">
+                    <button type="submit">Excluir</button>
+                </form>
             </li>
         {% endfor %}
     </ul>
