@@ -4,6 +4,7 @@ import boto3
 from flask import Flask, request, jsonify, render_template, redirect, url_for
 from datetime import datetime
 from io import BytesIO
+from pathlib import Path
 
 app = Flask(__name__)
 
@@ -42,23 +43,35 @@ def generate_audio():
     if not text:
         return jsonify({"error": "Texto não fornecido"}), 400
 
-    # Gera o texto usando o modelo GPT-4o
+    # Gera o texto usando o modelo GPT-4
     try:
         response = openai.ChatCompletion.create(
-            model="gpt-4o",
-            messages=[{"role": "user", "content": text}]
+            model="gpt-4",
+            messages=[
+                {"role": "system", "content": "Você é um assistente para Text To Speech. O texto que você receber vamos converter em audio, por isso preste atenção na pontuação e gramática para gerar as emoções."},
+                {"role": "user", "content": text}
+            ]
         )
         generated_text = response.choices[0].message['content'].strip()
     except Exception as e:
-        return jsonify({"error": f"Erro ao gerar texto com GPT-4o: {str(e)}"}), 500
+        return jsonify({"error": f"Erro ao gerar texto com GPT-4: {str(e)}"}), 500
 
-    # Converte o texto em áudio usando a API Whisper
+    # Converte o texto em áudio usando o TTS da OpenAI
     try:
-        audio_response = openai.Audio.create(
-            input=generated_text,
-            model="whisper-1"
+        # Cria um caminho temporário para salvar o arquivo de áudio
+        speech_file_path = Path("/tmp") / "speech.mp3"
+        audio_response = openai.Audio.speech.create(
+            model="tts-1",
+            voice="alloy",
+            input=generated_text
         )
-        audio_data = audio_response['data']
+        
+        # Salva o áudio no caminho temporário
+        audio_response.stream_to_file(speech_file_path)
+
+        # Lê o conteúdo do arquivo de áudio para upload no S3
+        with open(speech_file_path, "rb") as audio_file:
+            audio_data = audio_file.read()
     except Exception as e:
         return jsonify({"error": f"Erro ao converter texto em áudio: {str(e)}"}), 500
 
@@ -71,7 +84,7 @@ def generate_audio():
         s3.put_object(
             Bucket=bucket_name,
             Key=filename,
-            Body=BytesIO(audio_data),
+            Body=audio_data,
             ContentType="audio/mpeg"
         )
     except Exception as e:
