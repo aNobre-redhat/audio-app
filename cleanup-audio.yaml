@@ -1,0 +1,21 @@
+id: cleanup-audio
+namespace: default
+tasks:
+  - id: list-audios
+    type: io.kestra.plugin.s3.List
+    endpoint: "http://s3.openshift-storage.svc:443"
+    accessKeyId: "DRy4L1Pz8JC0CWNu3WOz"
+    secretAccessKey: "x8i7maz5ObzVcZVgh6Y6ounEIsYnXNV4sApgmlQ2"
+    bucket: "audio-storage-59a4534d-3066-40b6-941b-91691d8231b3"
+    max: 100
+    sort: ascending
+  - id: delete-old-audio
+    type: io.kestra.plugin.s3.Delete
+    endpoint: "http://s3.openshift-storage.svc:443"
+    accessKeyId: "DRy4L1Pz8JC0CWNu3WOz"
+    secretAccessKey: "x8i7maz5ObzVcZVgh6Y6ounEIsYnXNV4sApgmlQ2"
+    bucket: "audio-storage-59a4534d-3066-40b6-941b-91691d8231b3"
+    files:
+      - "{{ task['list-audios'].results[0].key }}"
+    condition:
+      - "task['list-audios'].count > 5"

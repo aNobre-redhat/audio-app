@@ -1,0 +1,38 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: audio-app
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: audio-app
+  namespace: audio-app
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: audio-app
+  template:
+    metadata:
+      labels:
+        app: audio-app
+    spec:
+      containers:
+      - name: audio-app
+        image: image-registry.openshift-image-registry.svc:5000/audio-app/audio-app:latest
+        ports:
+        - containerPort: 8080
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: audio-app-service
+  namespace: audio-app
+spec:
+  selector:
+    app: audio-app
+  ports:
+    - protocol: TCP
+      port: 8080
+      targetPort: 8080

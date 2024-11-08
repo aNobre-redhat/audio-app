@@ -1,0 +1,18 @@
+apiVersion: build.openshift.io/v1
+kind: BuildConfig
+metadata:
+  name: audio-app-build
+  namespace: audio-app
+spec:
+  source:
+    type: Git
+    git:
+      uri: "https://github.com/aNobre-redhat/audio-app.git" 
+  strategy:
+    type: Docker
+    dockerStrategy:
+      dockerfilePath: Dockerfile
+  output:
+    to:
+      kind: ImageStreamTag
+      name: "audio-app:latest"

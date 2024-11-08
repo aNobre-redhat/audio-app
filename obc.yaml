@@ -1,0 +1,17 @@
+apiVersion: objectbucket.io/v1alpha1
+kind: ObjectBucketClaim
+metadata:
+  namespace: audio-app
+  finalizers:
+    - objectbucket.io/finalizer
+  labels:
+    app: noobaa
+    bucket-provisioner: openshift-storage.noobaa.io-obc
+    noobaa-domain: openshift-storage.noobaa.io
+spec:
+  additionalConfig:
+    bucketclass: noobaa-default-bucket-class
+  bucketName: audio-storage-59a4534d-3066-40b6-941b-91691d8231b3
+  generateBucketName: audio-storage
+  objectBucketName: obc-default-audio-storage
+  storageClassName: openshift-storage.noobaa.io
