@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Audio App</title>
+</head>
+<body>
+    <h1>Audio App</h1>
+    <h2>Gerar Novo Áudio</h2>
+    <form action="{{ url_for('generate_audio') }}" method="post">
+        <label for="text">Digite o texto para gerar áudio:</label><br>
+        <input type="text" id="text" name="text" required><br><br>
+        <button type="submit">Gerar Áudio</button>
+    </form>
+
+    <h2>Áudios Gerados</h2>
+    <ul>
+        {% for audio in audio_files %}
+            <li>
+                {{ audio }} - <a href="{{ url_for('play_audio', filename=audio) }}" target="_blank">Ouvir</a>
+            </li>
+        {% endfor %}
+    </ul>
+</body>
+</html>

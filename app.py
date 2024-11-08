@@ -1,10 +1,9 @@
 import os
 import boto3
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, render_template, redirect, url_for
 import openai
 from datetime import datetime
 
-# Inicialize o Flask
 app = Flask(__name__)
 
 # Configuração da API OpenAI usando variável de ambiente para a chave de API
@@ -13,19 +12,31 @@ openai.api_key = os.getenv("OPENAI_API_KEY")
 # Configuração do cliente S3 do NooBaa usando variáveis de ambiente
 s3 = boto3.client(
     's3',
-    endpoint_url=os.getenv('S3_ENDPOINT_URL'),  # URL do endpoint S3 (NooBaa)
-    aws_access_key_id=os.getenv('AWS_ACCESS_KEY_ID'),  # Access Key ID do Secret
-    aws_secret_access_key=os.getenv('AWS_SECRET_ACCESS_KEY'),  # Secret Access Key do Secret
+    endpoint_url=os.getenv('S3_ENDPOINT_URL'),
+    aws_access_key_id=os.getenv('AWS_ACCESS_KEY_ID'),
+    aws_secret_access_key=os.getenv('AWS_SECRET_ACCESS_KEY'),
     verify=True  # SSL ativado para o endpoint HTTPS
 )
 
 # Nome do bucket S3 definido como variável de ambiente no Deployment
 bucket_name = os.getenv("BUCKET_NAME")
 
+@app.route("/")
+def index():
+    # Recupera a lista de áudios armazenados no bucket
+    audio_files = []
+    try:
+        response = s3.list_objects_v2(Bucket=bucket_name)
+        for obj in response.get("Contents", []):
+            audio_files.append(obj["Key"])
+    except Exception as e:
+        print(f"Erro ao listar áudios: {str(e)}")
+
+    return render_template("index.html", audio_files=audio_files)
+
 @app.route("/generate-audio", methods=["POST"])
 def generate_audio():
-    data = request.json
-    text = data.get("text", "")
+    text = request.form.get("text", "")
 
     if not text:
         return jsonify({"error": "Texto não fornecido"}), 400
@@ -54,7 +65,7 @@ def generate_audio():
     except Exception as e:
         return jsonify({"error": f"Erro ao fazer upload para o bucket S3: {str(e)}"}), 500
 
-    return jsonify({"message": "Áudio gerado e armazenado", "filename": filename})
+    return redirect(url_for("index"))
 
 @app.route("/play-audio/<filename>", methods=["GET"])
 def play_audio(filename):
@@ -68,8 +79,7 @@ def play_audio(filename):
     except Exception as e:
         return jsonify({"error": f"Erro ao gerar URL: {str(e)}"}), 500
 
-    return jsonify({"url": url})
+    return redirect(url)
 
-# Para desenvolvimento local
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=8080, debug=True)
