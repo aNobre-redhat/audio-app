@@ -1,15 +1,15 @@
 import os
-import openai
 import boto3
 from flask import Flask, request, jsonify, render_template, redirect, url_for
 from datetime import datetime
 from io import BytesIO
 from pathlib import Path
+from openai import OpenAI
 
 app = Flask(__name__)
 
 # Configuração da API OpenAI
-openai.api_key = os.getenv("OPENAI_API_KEY")
+client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
 # Configuração do cliente S3 do NooBaa
 s3 = boto3.client(
@@ -49,7 +49,7 @@ def generate_audio():
         speech_file_path = Path("/tmp") / "speech.mp3"
         
         # Converte o texto em áudio usando a API de TTS da OpenAI
-        response = openai.Audio.speech.create(
+        response = client.audio.speech.create(
             model="tts-1",
             voice="alloy",
             input=text
