@@ -1,5 +1,5 @@
 import os
-import openai
+from openai import OpenAI
 import boto3
 from flask import Flask, request, jsonify, render_template, redirect, url_for, Response
 from datetime import datetime
@@ -46,6 +46,8 @@ def generate_audio():
     # Converte o texto em áudio usando o TTS da OpenAI
     try:
         speech_file_path = Path("/tmp") / "speech.mp3"
+        
+        # Utiliza client.audio.speech.create como manda a documentação
         response = client.audio.speech.create(
             model="tts-1",
             voice="alloy",
