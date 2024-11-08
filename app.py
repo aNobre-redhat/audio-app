@@ -43,31 +43,20 @@ def generate_audio():
     if not text:
         return jsonify({"error": "Texto não fornecido"}), 400
 
-    # Gera o texto usando o modelo GPT-4
-    try:
-        response = openai.ChatCompletion.create(
-            model="gpt-4",
-            messages=[
-                {"role": "system", "content": "Você é um assistente para Text To Speech. O texto que você receber vamos converter em audio, por isso preste atenção na pontuação e gramática para gerar as emoções."},
-                {"role": "user", "content": text}
-            ]
-        )
-        generated_text = response.choices[0].message['content'].strip()
-    except Exception as e:
-        return jsonify({"error": f"Erro ao gerar texto com GPT-4: {str(e)}"}), 500
-
     # Converte o texto em áudio usando o TTS da OpenAI
     try:
-        # Cria um caminho temporário para salvar o arquivo de áudio
+        # Caminho temporário para salvar o arquivo de áudio
         speech_file_path = Path("/tmp") / "speech.mp3"
-        audio_response = openai.Audio.speech.create(
+        
+        # Converte o texto em áudio usando a API de TTS da OpenAI
+        response = openai.Audio.speech.create(
             model="tts-1",
             voice="alloy",
-            input=generated_text
+            input=text
         )
         
         # Salva o áudio no caminho temporário
-        audio_response.stream_to_file(speech_file_path)
+        response.stream_to_file(speech_file_path)
 
         # Lê o conteúdo do arquivo de áudio para upload no S3
         with open(speech_file_path, "rb") as audio_file:
