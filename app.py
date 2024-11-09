@@ -82,10 +82,11 @@ def upload_image():
     image_path = Path("/tmp") / filename
     image.save(image_path)
 
-    # Upload da imagem para um URL temporário no S3
+    # Upload da imagem para S3 e geração de URL correta
     try:
         s3.put_object(Bucket=bucket_name, Key=filename, Body=open(image_path, "rb"), ContentType="image/jpeg")
-        image_url = f"https://{s3.meta.endpoint_url}/{bucket_name}/{filename}"
+        endpoint_url = os.getenv('S3_ENDPOINT_URL').rstrip('/')  # Remove a barra final se houver
+        image_url = f"{endpoint_url}/{bucket_name}/{filename}"  # Concatena URL corretamente
     except Exception as e:
         return jsonify({"error": f"Erro ao fazer upload da imagem para o S3: {str(e)}"}), 500
 
