@@ -89,15 +89,15 @@ def analyze_image():
     file.save(file_path)
 
     try:
-        # Lê o conteúdo do arquivo de imagem e faz o upload para o bucket S3 (NooBaa)
+        # Faz o upload da imagem para o bucket S3 (NooBaa)
         with open(file_path, "rb") as img_file:
             image_data = img_file.read()
         s3.put_object(Bucket=bucket_name, Key=filename, Body=image_data, ContentType="image/jpeg")
 
-        # Usa a rota /download-audio para fornecer o link acessível para a OpenAI
+        # Construir a URL da imagem usando o mesmo formato de acesso do botão de exclusão
         image_url = url_for("download_audio", filename=filename, _external=True)
 
-        # Chama a API da OpenAI para análise de imagem usando a URL da rota de download
+        # Chama a API da OpenAI para análise de imagem com a URL sem modificações
         response = client.chat.completions.create(
             model="gpt-4o-mini",
             messages=[
@@ -130,6 +130,7 @@ def analyze_image():
         return jsonify({"error": f"Erro na análise de imagem: {str(e)}"}), 500
 
     return redirect(url_for("index"))
+
 
 @app.route("/download-audio/<filename>", methods=["GET"])
 def download_audio(filename):
