@@ -1,15 +1,16 @@
 import os
-from flask import Flask, request, jsonify, render_template, redirect, url_for, Response, send_file
+from flask import Flask, request, jsonify, render_template, redirect, url_for, Response
 from datetime import datetime
 from pathlib import Path
 import boto3
-from openai import OpenAI
+import openai
 from werkzeug.utils import secure_filename
 
 app = Flask(__name__)
 
 # Configuração da API OpenAI
-client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+openai.api_key = os.getenv("OPENAI_API_KEY")
+client = openai.OpenAI()  # Inicializa o cliente
 
 # Configuração do cliente S3 do NooBaa
 s3 = boto3.client(
@@ -39,15 +40,18 @@ def index():
 @app.route("/generate-audio", methods=["POST"])
 def generate_audio():
     text = request.form.get("text", "")
+    voice = request.form.get("voice", "alloy")
+    filename = request.form.get("filename", f"audio_{datetime.utcnow().strftime('%Y%m%d%H%M%S')}.mp3")
+
     if not text:
         return jsonify({"error": "Texto não fornecido"}), 400
 
     # Geração de áudio a partir do texto
     try:
-        audio_file_path = Path("/tmp") / "generated_audio.mp3"
-        tts_response = client.audio.speech.create(
+        audio_file_path = Path("/tmp") / filename
+        tts_response = openai.Audio.create(
             model="tts-1",
-            voice="alloy",
+            voice=voice,
             input=text
         )
         tts_response.stream_to_file(audio_file_path)
@@ -56,10 +60,6 @@ def generate_audio():
             audio_data = audio_file.read()
     except Exception as e:
         return jsonify({"error": f"Erro ao gerar áudio: {str(e)}"}), 500
-
-    # Define um nome de arquivo baseado em timestamp
-    timestamp = datetime.utcnow().strftime("%Y%m%d%H%M%S")
-    filename = f"audio_{timestamp}.mp3"
 
     # Upload do áudio para o S3
     try:
@@ -82,17 +82,31 @@ def upload_image():
     image_path = Path("/tmp") / filename
     image.save(image_path)
 
-    # Análise de imagem com GPT-4 Vision
+    # Upload da imagem para um URL temporário no S3
     try:
-        with open(image_path, "rb") as img_file:
-            response = client.ChatCompletion.create(
-                model="gpt-4-turbo",
-                messages=[
-                    {"role": "system", "content": "Você é um assistente de visão que analisa imagens."},
-                    {"role": "user", "content": "Descreva a imagem em detalhes, para ser lida para uma criança entender o que tem na imagem."}
-                ],
-                files=[{"file": img_file, "purpose": "image"}]
-            )
+        s3.put_object(Bucket=bucket_name, Key=filename, Body=open(image_path, "rb"), ContentType="image/jpeg")
+        image_url = f"https://{s3.meta.endpoint_url}/{bucket_name}/{filename}"
+    except Exception as e:
+        return jsonify({"error": f"Erro ao fazer upload da imagem para o S3: {str(e)}"}), 500
+
+    # Análise da imagem usando o modelo de visão
+    try:
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "text", "text": "Descreva a imagem em detalhes, para ser lida para uma criança entender o que tem na imagem."},
+                        {
+                            "type": "image_url",
+                            "image_url": {"url": image_url}
+                        },
+                    ],
+                }
+            ],
+            max_tokens=300,
+        )
         description = response['choices'][0]['message']['content']
     except Exception as e:
         return jsonify({"error": f"Erro ao analisar imagem: {str(e)}"}), 500
@@ -100,7 +114,7 @@ def upload_image():
     # Geração de áudio a partir da descrição
     try:
         audio_file_path = Path("/tmp") / f"{filename}_description.mp3"
-        tts_response = client.audio.speech.create(
+        tts_response = openai.Audio.create(
             model="tts-1",
             voice="alloy",
             input=description
@@ -112,12 +126,11 @@ def upload_image():
     except Exception as e:
         return jsonify({"error": f"Erro ao gerar áudio: {str(e)}"}), 500
 
-    # Salvar imagem e áudio no S3
+    # Salvar o áudio no S3
     try:
-        s3.put_object(Bucket=bucket_name, Key=filename, Body=open(image_path, "rb"), ContentType="image/jpeg")
         s3.put_object(Bucket=bucket_name, Key=f"{filename}_description.mp3", Body=audio_data, ContentType="audio/mpeg")
     except Exception as e:
-        return jsonify({"error": f"Erro ao fazer upload para o bucket S3: {str(e)}"}), 500
+        return jsonify({"error": f"Erro ao fazer upload do áudio para o bucket S3: {str(e)}"}), 500
 
     return redirect(url_for("index"))
 
