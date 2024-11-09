@@ -79,14 +79,16 @@
         if (savedTheme === 'dark') {
             modeToggle.checked = true;
             themeStylesheet.href = "{{ url_for('static', filename='dark.css') }}";
+        } else {
+            themeStylesheet.href = "{{ url_for('static', filename='light.css') }}";
         }
 
         modeToggle.addEventListener('change', () => {
             if (modeToggle.checked) {
-                themeStylesheet.href = "{{ url_for('static', filename='dark.css') }}";
+                themeStylesheet.href = "{{ url_for('static', filename='dark.css') }}?t=" + new Date().getTime();
                 localStorage.setItem('theme', 'dark');
             } else {
-                themeStylesheet.href = "{{ url_for('static', filename='light.css') }}";
+                themeStylesheet.href = "{{ url_for('static', filename='light.css') }}?t=" + new Date().getTime();
                 localStorage.setItem('theme', 'light');
             }
         });
