@@ -89,17 +89,22 @@ def analyze_image():
     file.save(file_path)
 
     try:
-        # Faz o upload da imagem para o bucket S3 (NooBaa)
-        s3.put_object(Bucket=bucket_name, Key=filename, Body=open(file_path, "rb"), ContentType="image/jpeg")
+        # Lê o conteúdo do arquivo de imagem
+        with open(file_path, "rb") as img_file:
+            image_data = img_file.read()
 
-        # Gera a URL pública da imagem da mesma forma que para os arquivos de áudio
-        image_url = s3.generate_presigned_url(
-            'get_object',
-            Params={'Bucket': bucket_name, 'Key': filename},
-            ExpiresIn=3600  # Link válido por 1 hora
+        # Faz o upload da imagem para o bucket S3 (NooBaa) de maneira consistente com a rota /generate-audio
+        s3.put_object(
+            Bucket=bucket_name,
+            Key=filename,
+            Body=image_data,
+            ContentType="image/jpeg"
         )
 
-        # Chama a API da OpenAI para análise de imagem usando a URL gerada
+        # Construir o URL público sem autenticação, se aplicável, como usado para os áudios
+        image_url = f"https://{bucket_name}.s3.amazonaws.com/{filename}"
+
+        # Chama a API da OpenAI para análise de imagem usando o URL direto
         response = client.chat.completions.create(
             model="gpt-4o-mini",
             messages=[
