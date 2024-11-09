@@ -4,25 +4,90 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block title %}Audio App{% endblock %}</title>
+    <!-- Bootstrap CSS -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link id="theme-style" rel="stylesheet" href="{{ url_for('static', filename='css/dark.css') }}">
+    <!-- Custom CSS for dark/light mode switch -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='light.css') }}" id="theme-stylesheet">
+    <style>
+        /* Toggle switch styles */
+        .switch {
+            position: relative;
+            display: inline-block;
+            width: 60px;
+            height: 34px;
+        }
+
+        .switch input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+
+        .slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: #ccc;
+            transition: 0.4s;
+            border-radius: 34px;
+        }
+
+        .slider:before {
+            position: absolute;
+            content: "";
+            height: 26px;
+            width: 26px;
+            left: 4px;
+            bottom: 4px;
+            background-color: white;
+            transition: 0.4s;
+            border-radius: 50%;
+        }
+
+        input:checked + .slider {
+            background-color: #2196F3;
+        }
+
+        input:checked + .slider:before {
+            transform: translateX(26px);
+        }
+    </style>
 </head>
 <body>
     <div class="container my-5">
+        <!-- Dark/Light mode toggle switch -->
         <label class="switch">
-            <input type="checkbox" id="toggle-dark-mode">
-            <span class="slider round"></span>
+            <input type="checkbox" id="mode-toggle">
+            <span class="slider"></span>
         </label>
+
         {% block content %}{% endblock %}
     </div>
+
+    <!-- Bootstrap JS Bundle -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
     <script>
-        document.getElementById('toggle-dark-mode').addEventListener('change', function() {
-            const link = document.getElementById('theme-style');
-            if (this.checked) {
-                link.href = "{{ url_for('static', filename='css/dark.css') }}";
+        // Script to toggle between dark and light mode
+        const modeToggle = document.getElementById('mode-toggle');
+        const themeStylesheet = document.getElementById('theme-stylesheet');
+
+        // Check for saved theme in local storage
+        const savedTheme = localStorage.getItem('theme');
+        if (savedTheme === 'dark') {
+            modeToggle.checked = true;
+            themeStylesheet.href = "{{ url_for('static', filename='dark.css') }}";
+        }
+
+        modeToggle.addEventListener('change', () => {
+            if (modeToggle.checked) {
+                themeStylesheet.href = "{{ url_for('static', filename='dark.css') }}";
+                localStorage.setItem('theme', 'dark');
             } else {
-                link.href = "{{ url_for('static', filename='css/light.css') }}";
+                themeStylesheet.href = "{{ url_for('static', filename='light.css') }}";
+                localStorage.setItem('theme', 'light');
             }
         });
     </script>
