@@ -37,47 +37,6 @@ def index():
 
     return render_template("index.html", audio_files=audio_files, image_files=image_files)
 
-@app.route("/generate-audio", methods=["POST"])
-def generate_audio():
-    text = request.form.get("text", "")
-    filename = request.form.get("filename", "")
-    voice = request.form.get("voice", "alloy")
-    model = request.form.get("model", "tts-1")
-
-    if not text:
-        return jsonify({"error": "Texto não fornecido"}), 400
-
-    try:
-        speech_file_path = Path("/tmp") / "speech.mp3"
-        response = client.audio.speech.create(
-            model=model,
-            voice=voice,
-            input=text
-        )
-        response.stream_to_file(speech_file_path)
-
-        with open(speech_file_path, "rb") as audio_file:
-            audio_data = audio_file.read()
-    except Exception as e:
-        return jsonify({"error": f"Erro ao converter texto em áudio: {str(e)}"}), 500
-
-    timestamp = datetime.utcnow().strftime("%Y%m%d%H%M%S")
-    if not filename:
-        filename = f"audio_{timestamp}"
-    filename = f"{filename}.mp3"
-
-    try:
-        s3.put_object(
-            Bucket=bucket_name,
-            Key=filename,
-            Body=audio_data,
-            ContentType="audio/mpeg"
-        )
-    except Exception as e:
-        return jsonify({"error": f"Erro ao fazer upload para o bucket S3: {str(e)}"}), 500
-
-    return redirect(url_for("index"))
-
 @app.route("/analyze-image", methods=["POST"])
 def analyze_image():
     if "file" not in request.files:
@@ -89,23 +48,15 @@ def analyze_image():
     file.save(file_path)
 
     try:
-        # Lê o conteúdo do arquivo de imagem
+        # Lê o conteúdo do arquivo de imagem e faz o upload para o bucket S3 (NooBaa)
         with open(file_path, "rb") as img_file:
             image_data = img_file.read()
+        s3.put_object(Bucket=bucket_name, Key=filename, Body=image_data, ContentType="image/jpeg")
 
-        # Faz o upload da imagem para o bucket S3 (NooBaa), seguindo o mesmo processo que para os áudios
-        s3.put_object(
-            Bucket=bucket_name,
-            Key=filename,
-            Body=image_data,
-            ContentType="image/jpeg"
-        )
+        # Usa a rota /download-audio para fornecer o link acessível para a OpenAI
+        image_url = url_for("download_audio", filename=filename, _external=True)
 
-        # Constrói a URL pública usando o endpoint do NooBaa, como é feito para os áudios
-        endpoint_url = os.getenv("S3_ENDPOINT_URL")  # URL base do NooBaa já configurada
-        image_url = f"{endpoint_url}/{bucket_name}/{filename}"
-
-        # Chama a API da OpenAI para análise de imagem com a URL correta do NooBaa
+        # Chama a API da OpenAI para análise de imagem usando a URL da rota de download
         response = client.chat.completions.create(
             model="gpt-4o-mini",
             messages=[
@@ -138,6 +89,7 @@ def analyze_image():
         return jsonify({"error": f"Erro na análise de imagem: {str(e)}"}), 500
 
     return redirect(url_for("index"))
+
 
 @app.route("/download-audio/<filename>", methods=["GET"])
 def download_audio(filename):
