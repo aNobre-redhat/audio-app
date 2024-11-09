@@ -36,6 +36,39 @@ def index():
 
     return render_template("index.html", audio_files=audio_files)
 
+@app.route("/generate-audio", methods=["POST"])
+def generate_audio():
+    text = request.form.get("text", "")
+    if not text:
+        return jsonify({"error": "Texto não fornecido"}), 400
+
+    # Geração de áudio a partir do texto
+    try:
+        audio_file_path = Path("/tmp") / "generated_audio.mp3"
+        tts_response = client.audio.speech.create(
+            model="tts-1",
+            voice="alloy",
+            input=text
+        )
+        tts_response.stream_to_file(audio_file_path)
+
+        with open(audio_file_path, "rb") as audio_file:
+            audio_data = audio_file.read()
+    except Exception as e:
+        return jsonify({"error": f"Erro ao gerar áudio: {str(e)}"}), 500
+
+    # Define um nome de arquivo baseado em timestamp
+    timestamp = datetime.utcnow().strftime("%Y%m%d%H%M%S")
+    filename = f"audio_{timestamp}.mp3"
+
+    # Upload do áudio para o S3
+    try:
+        s3.put_object(Bucket=bucket_name, Key=filename, Body=audio_data, ContentType="audio/mpeg")
+    except Exception as e:
+        return jsonify({"error": f"Erro ao fazer upload para o bucket S3: {str(e)}"}), 500
+
+    return redirect(url_for("index"))
+
 @app.route("/upload-image", methods=["POST"])
 def upload_image():
     if 'image' not in request.files:
