@@ -94,11 +94,10 @@ def analyze_image():
             image_data = img_file.read()
         s3.put_object(Bucket=bucket_name, Key=filename, Body=image_data, ContentType="image/jpeg")
 
-        # Constrói a URL pública diretamente usando o endpoint S3 do NooBaa
-        endpoint_url = os.getenv("S3_ENDPOINT_URL")  # A URL base pública do NooBaa
-        image_url = f"{endpoint_url}/{bucket_name}/{filename}"
+        # Constrói a URL de serviço para a OpenAI, usando a nova rota serve-image
+        image_url = url_for("serve_image", filename=filename, _external=True)
 
-        # Chama a API da OpenAI para análise de imagem com um timeout definido
+        # Chama a API da OpenAI para análise de imagem com a URL servida pelo Flask
         response = client.chat.completions.create(
             model="gpt-4o-mini",
             messages=[
@@ -132,6 +131,18 @@ def analyze_image():
         return jsonify({"error": f"Erro na análise de imagem: {str(e)}"}), 500
 
     return redirect(url_for("index"))
+
+@app.route("/serve-image/<filename>", methods=["GET"])
+def serve_image(filename):
+    try:
+        image_obj = s3.get_object(Bucket=bucket_name, Key=filename)
+        return Response(
+            image_obj["Body"].read(),
+            content_type="image/jpeg",
+            headers={"Content-Disposition": f'inline; filename="{filename}"'}
+        )
+    except Exception as e:
+        return jsonify({"error": f"Erro ao servir imagem: {str(e)}"}), 500
 
 @app.route("/download-audio/<filename>", methods=["GET"])
 def download_audio(filename):
