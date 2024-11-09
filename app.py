@@ -98,7 +98,7 @@ def analyze_image():
         endpoint_url = os.getenv("S3_ENDPOINT_URL")  # A URL base pública do NooBaa
         image_url = f"{endpoint_url}/{bucket_name}/{filename}"
 
-        # Chama a API da OpenAI para análise de imagem com a URL direta do NooBaa
+        # Chama a API da OpenAI para análise de imagem com um timeout definido
         response = client.chat.completions.create(
             model="gpt-4o-mini",
             messages=[
@@ -110,7 +110,8 @@ def analyze_image():
                     ]
                 }
             ],
-            max_tokens=300
+            max_tokens=300,
+            timeout=120  # Timeout configurado para a requisição da OpenAI
         )
         analysis_text = response.choices[0].message["content"]
 
