@@ -89,9 +89,17 @@ def analyze_image():
     file.save(file_path)
 
     try:
+        # Faz o upload da imagem para o bucket S3
         s3.put_object(Bucket=bucket_name, Key=filename, Body=open(file_path, "rb"), ContentType="image/jpeg")
 
-        image_url = f"https://{bucket_name}.s3.amazonaws.com/{filename}"
+        # Gera um URL assinado para a imagem com duração temporária
+        image_url = s3.generate_presigned_url(
+            'get_object',
+            Params={'Bucket': bucket_name, 'Key': filename},
+            ExpiresIn=3600  # Link válido por 1 hora
+        )
+
+        # Chama a API da OpenAI para análise de imagem
         response = client.chat.completions.create(
             model="gpt-4o-mini",
             messages=[
@@ -107,6 +115,7 @@ def analyze_image():
         )
         analysis_text = response.choices[0].message["content"]
 
+        # Converte o texto de análise em áudio
         speech_file_path = Path("/tmp") / "analysis_audio.mp3"
         speech_response = client.audio.speech.create(
             model="tts-1",
@@ -115,6 +124,7 @@ def analyze_image():
         )
         speech_response.stream_to_file(speech_file_path)
 
+        # Faz o upload do áudio resultante
         audio_filename = f"{filename.rsplit('.', 1)[0]}_analysis.mp3"
         with open(speech_file_path, "rb") as audio_file:
             s3.put_object(Bucket=bucket_name, Key=audio_filename, Body=audio_file.read(), ContentType="audio/mpeg")
