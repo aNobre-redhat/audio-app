@@ -1,71 +1,51 @@
 {% extends "base.html" %}
 
-{% block title %}Audio Generator{% endblock %}
+{% block title %}Audio Generator & Vision{% endblock %}
 
 {% block content %}
 <div class="row">
-    <!-- Coluna Esquerda: Formulário -->
+    <!-- Formulário de TTS e Imagem -->
     <div class="col-md-6">
         <h2>Gerar Novo Áudio</h2>
         <form action="{{ url_for('generate_audio') }}" method="post" class="mb-4 p-4 border rounded">
-            <div class="mb-3">
-                <label for="filename" class="form-label">Nome do Arquivo:</label>
-                <input type="text" id="filename" name="filename" class="form-control" placeholder="Nome do arquivo">
-            </div>
-
-            <!-- Dropdown para selecionar a voz -->
-            <div class="mb-3">
-                <label for="voice" class="form-label">Selecionar Voz:</label>
-                <select id="voice" name="voice" class="form-select" required>
-                    <option value="alloy">Alloy</option>
-                    <option value="echo">Echo</option>
-                    <option value="fable">Fable</option>
-                    <option value="onyx">Onyx</option>
-                    <option value="nova">Nova</option>
-                    <option value="shimmer">Shimmer</option>
-                </select>
-            </div>
-
-            <!-- Dropdown para selecionar o modelo -->
-            <div class="mb-3">
-                <label for="model" class="form-label">Selecionar Modelo:</label>
-                <select id="model" name="model" class="form-select" required>
-                    <option value="tts-1">TTS-1</option>
-                    <option value="tts-1-hd">TTS-1-HD</option>
-                </select>
-            </div>
-
-            <!-- Campo de texto para gerar áudio -->
             <div class="mb-3">
                 <label for="text" class="form-label">Texto para gerar áudio:</label>
                 <textarea id="text" name="text" class="form-control" rows="3" required></textarea>
             </div>
             <button type="submit" class="btn btn-primary">Gerar Áudio</button>
         </form>
+
+        <h2>Leitura de Imagem</h2>
+        <form action="{{ url_for('upload_image') }}" method="post" enctype="multipart/form-data" class="mb-4 p-4 border rounded">
+            <div class="mb-3">
+                <label for="image" class="form-label">Escolha uma imagem:</label>
+                <input type="file" id="image" name="image" class="form-control" required>
+            </div>
+            <button type="submit" class="btn btn-primary">Enviar Imagem</button>
+        </form>
     </div>
 
-    <!-- Coluna Direita: Lista de Áudios -->
+    <!-- Lista de Áudios e Imagens -->
     <div class="col-md-6">
-        <h2>Áudios Gerados</h2>
+        <h2>Arquivos Gerados</h2>
         <div class="list-group">
-            {% for audio in audio_files %}
-                <div class="list-group-item">
-                    <div class="d-flex justify-content-between align-items-center">
-                        <strong>{{ audio }}</strong>
-                        <div>
-                            <form action="{{ url_for('delete_audio', filename=audio) }}" method="post" style="display:inline;">
-                                <button type="submit" class="btn btn-danger btn-sm">Excluir</button>
-                            </form>
-                            <a href="{{ url_for('download_audio', filename=audio) }}" class="btn btn-primary btn-sm ms-2">
-                                <i class="bi bi-download"></i> Download
-                            </a>
+            {% for file in audio_files %}
+                {% if file.endswith(".mp3") %}
+                    <div class="list-group-item">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <strong>{{ file }}</strong>
+                            <div>
+                                <a href="{{ url_for('download', filename=file) }}" class="btn btn-primary btn-sm">
+                                    <i class="bi bi-download"></i> Download
+                                </a>
+                            </div>
                         </div>
+                        <audio controls class="w-100 mt-2">
+                            <source src="{{ url_for('play_audio', filename=file) }}" type="audio/mpeg">
+                            Seu navegador não suporta o elemento de áudio.
+                        </audio>
                     </div>
-                    <audio controls class="w-100 mt-2">
-                        <source src="{{ url_for('play_audio', filename=audio) }}" type="audio/mpeg">
-                        Seu navegador não suporta o elemento de áudio.
-                    </audio>
-                </div>
+                {% endif %}
             {% endfor %}
         </div>
     </div>

@@ -4,6 +4,7 @@ from datetime import datetime
 from pathlib import Path
 import boto3
 from openai import OpenAI
+from werkzeug.utils import secure_filename
 
 app = Flask(__name__)
 
@@ -24,7 +25,7 @@ bucket_name = os.getenv("BUCKET_NAME")
 
 @app.route("/")
 def index():
-    # Recupera a lista de áudios armazenados no bucket
+    # Recupera a lista de áudios e imagens armazenados no bucket
     audio_files = []
     try:
         response = s3.list_objects_v2(Bucket=bucket_name)
@@ -35,66 +36,71 @@ def index():
 
     return render_template("index.html", audio_files=audio_files)
 
-@app.route("/generate-audio", methods=["POST"])
-def generate_audio():
-    text = request.form.get("text", "")
-    filename = request.form.get("filename", "")
-    voice = request.form.get("voice", "alloy")  # Valor padrão caso não seja enviado
-    model = request.form.get("model", "tts-1")  # Valor padrão caso não seja enviado
+@app.route("/upload-image", methods=["POST"])
+def upload_image():
+    if 'image' not in request.files:
+        return jsonify({"error": "Nenhuma imagem enviada"}), 400
+    
+    image = request.files['image']
+    if image.filename == '':
+        return jsonify({"error": "Nenhuma imagem selecionada"}), 400
+    
+    filename = secure_filename(image.filename)
+    image_path = Path("/tmp") / filename
+    image.save(image_path)
 
-    if not text:
-        return jsonify({"error": "Texto não fornecido"}), 400
-
-    # Converte o texto em áudio usando o TTS da OpenAI com o modelo e voz selecionados
+    # Análise de imagem com GPT-4 Vision
     try:
-        speech_file_path = Path("/tmp") / "speech.mp3"
-        response = client.audio.speech.create(
-            model=model,  # Modelo selecionado
-            voice=voice,  # Voz selecionada
-            input=text
-        )
-        response.stream_to_file(speech_file_path)
+        with open(image_path, "rb") as img_file:
+            response = client.ChatCompletion.create(
+                model="gpt-4-turbo",
+                messages=[
+                    {"role": "system", "content": "Você é um assistente de visão que analisa imagens."},
+                    {"role": "user", "content": "Descreva a imagem em detalhes, para ser lida para uma criança entender o que tem na imagem."}
+                ],
+                files=[{"file": img_file, "purpose": "image"}]
+            )
+        description = response['choices'][0]['message']['content']
+    except Exception as e:
+        return jsonify({"error": f"Erro ao analisar imagem: {str(e)}"}), 500
 
-        # Lê o conteúdo do arquivo de áudio para upload no S3
-        with open(speech_file_path, "rb") as audio_file:
+    # Geração de áudio a partir da descrição
+    try:
+        audio_file_path = Path("/tmp") / f"{filename}_description.mp3"
+        tts_response = client.audio.speech.create(
+            model="tts-1",
+            voice="alloy",
+            input=description
+        )
+        tts_response.stream_to_file(audio_file_path)
+
+        with open(audio_file_path, "rb") as audio_file:
             audio_data = audio_file.read()
     except Exception as e:
-        return jsonify({"error": f"Erro ao converter texto em áudio: {str(e)}"}), 500
+        return jsonify({"error": f"Erro ao gerar áudio: {str(e)}"}), 500
 
-    # Define o nome do arquivo ou usa o timestamp como fallback
-    timestamp = datetime.utcnow().strftime("%Y%m%d%H%M%S")
-    if not filename:
-        filename = f"audio_{timestamp}"
-    filename = f"{filename}.mp3"
-
-    # Upload do áudio para o bucket S3 (NooBaa)
+    # Salvar imagem e áudio no S3
     try:
-        s3.put_object(
-            Bucket=bucket_name,
-            Key=filename,
-            Body=audio_data,
-            ContentType="audio/mpeg"
-        )
+        s3.put_object(Bucket=bucket_name, Key=filename, Body=open(image_path, "rb"), ContentType="image/jpeg")
+        s3.put_object(Bucket=bucket_name, Key=f"{filename}_description.mp3", Body=audio_data, ContentType="audio/mpeg")
     except Exception as e:
         return jsonify({"error": f"Erro ao fazer upload para o bucket S3: {str(e)}"}), 500
 
     return redirect(url_for("index"))
 
-@app.route("/download-audio/<filename>", methods=["GET"])
-def download_audio(filename):
+@app.route("/download/<filename>", methods=["GET"])
+def download(filename):
     try:
-        audio_obj = s3.get_object(Bucket=bucket_name, Key=filename)
+        file_obj = s3.get_object(Bucket=bucket_name, Key=filename)
         return Response(
-            audio_obj["Body"].read(),
-            content_type="audio/mpeg",
+            file_obj["Body"].read(),
             headers={"Content-Disposition": f'attachment; filename="{filename}"'}
         )
     except Exception as e:
-        return jsonify({"error": f"Erro ao baixar áudio: {str(e)}"}), 500
+        return jsonify({"error": f"Erro ao baixar arquivo: {str(e)}"}), 500
 
 @app.route("/play-audio/<filename>", methods=["GET"])
 def play_audio(filename):
-    # Gera o conteúdo do áudio diretamente para o navegador
     try:
         audio_obj = s3.get_object(Bucket=bucket_name, Key=filename)
         return Response(
@@ -104,16 +110,6 @@ def play_audio(filename):
         )
     except Exception as e:
         return jsonify({"error": f"Erro ao obter áudio: {str(e)}"}), 500
-
-@app.route("/delete-audio/<filename>", methods=["POST"])
-def delete_audio(filename):
-    # Exclui o áudio do bucket S3
-    try:
-        s3.delete_object(Bucket=bucket_name, Key=filename)
-    except Exception as e:
-        return jsonify({"error": f"Erro ao excluir áudio: {str(e)}"}), 500
-
-    return redirect(url_for("index"))
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=8080, debug=True)
