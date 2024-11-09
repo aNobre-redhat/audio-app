@@ -94,10 +94,11 @@ def analyze_image():
             image_data = img_file.read()
         s3.put_object(Bucket=bucket_name, Key=filename, Body=image_data, ContentType="image/jpeg")
 
-        # Construir a URL da imagem usando o mesmo formato de acesso do botão de exclusão
-        image_url = url_for("download_audio", filename=filename, _external=True)
+        # Constrói a URL pública diretamente usando o endpoint S3 do NooBaa
+        endpoint_url = os.getenv("S3_ENDPOINT_URL")  # A URL base pública do NooBaa
+        image_url = f"{endpoint_url}/{bucket_name}/{filename}"
 
-        # Chama a API da OpenAI para análise de imagem com a URL sem modificações
+        # Chama a API da OpenAI para análise de imagem com a URL direta do NooBaa
         response = client.chat.completions.create(
             model="gpt-4o-mini",
             messages=[
@@ -130,7 +131,6 @@ def analyze_image():
         return jsonify({"error": f"Erro na análise de imagem: {str(e)}"}), 500
 
     return redirect(url_for("index"))
-
 
 @app.route("/download-audio/<filename>", methods=["GET"])
 def download_audio(filename):
