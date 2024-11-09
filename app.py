@@ -49,7 +49,7 @@ def generate_audio():
     # Geração de áudio a partir do texto
     try:
         audio_file_path = Path("/tmp") / filename
-        tts_response = openai.Audio.create(
+        tts_response = client.audio.speech.create(
             model="tts-1",
             voice=voice,
             input=text
@@ -115,7 +115,7 @@ def upload_image():
     # Geração de áudio a partir da descrição
     try:
         audio_file_path = Path("/tmp") / f"{filename}_description.mp3"
-        tts_response = openai.Audio.create(
+        tts_response = client.audio.speech.create(
             model="tts-1",
             voice="alloy",
             input=description
@@ -157,6 +157,14 @@ def play_audio(filename):
         )
     except Exception as e:
         return jsonify({"error": f"Erro ao obter áudio: {str(e)}"}), 500
+
+@app.route("/delete_file/<filename>", methods=["POST"])
+def delete_file(filename):
+    try:
+        s3.delete_object(Bucket=bucket_name, Key=filename)
+    except Exception as e:
+        return jsonify({"error": f"Erro ao excluir o arquivo: {str(e)}"}), 500
+    return redirect(url_for("index"))
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=8080, debug=True)
