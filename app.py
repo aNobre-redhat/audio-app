@@ -1,6 +1,6 @@
 import os
-from flask import Flask, request, jsonify, render_template, redirect, url_for, Response
-from datetime import datetime, timedelta
+from flask import Flask, request, jsonify, render_template, redirect, url_for, Response, send_from_directory
+from datetime import datetime
 from pathlib import Path
 import boto3
 from openai import OpenAI
@@ -20,6 +20,10 @@ s3 = boto3.client(
 )
 
 bucket_name = os.getenv("BUCKET_NAME")
+local_temp_dir = "/tmp/images"
+
+# Certifique-se de que o diretório temporário existe
+os.makedirs(local_temp_dir, exist_ok=True)
 
 @app.route("/")
 def index():
@@ -94,14 +98,15 @@ def analyze_image():
             image_data = img_file.read()
         s3.put_object(Bucket=bucket_name, Key=filename, Body=image_data, ContentType="image/jpeg")
 
-        # Gerar URL pre-assinada diretamente para o arquivo no S3
-        image_url = s3.generate_presigned_url(
-            'get_object',
-            Params={'Bucket': bucket_name, 'Key': filename},
-            ExpiresIn=3600  # Link válido por 1 hora
-        )
+        # Baixa a imagem para o sistema de arquivos local temporário
+        local_image_path = os.path.join(local_temp_dir, filename)
+        with open(local_image_path, "wb") as local_file:
+            local_file.write(image_data)
 
-        # Chama a API da OpenAI para análise de imagem com a URL pre-assinada
+        # Constrói a URL local para a OpenAI
+        image_url = url_for("serve_local_image", filename=filename, _external=True)
+
+        # Chama a API da OpenAI para análise de imagem com a URL local
         response = client.chat.completions.create(
             model="gpt-4o-mini",
             messages=[
@@ -131,10 +136,17 @@ def analyze_image():
         audio_filename = f"{filename.rsplit('.', 1)[0]}_analysis.mp3"
         with open(speech_file_path, "rb") as audio_file:
             s3.put_object(Bucket=bucket_name, Key=audio_filename, Body=audio_file.read(), ContentType="audio/mpeg")
+
+        # Limpa o arquivo local temporário
+        os.remove(local_image_path)
     except Exception as e:
         return jsonify({"error": f"Erro na análise de imagem: {str(e)}"}), 500
 
     return redirect(url_for("index"))
+
+@app.route("/local-image/<filename>", methods=["GET"])
+def serve_local_image(filename):
+    return send_from_directory(local_temp_dir, filename)
 
 @app.route("/download-audio/<filename>", methods=["GET"])
 def download_audio(filename):
