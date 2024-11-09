@@ -37,6 +37,47 @@ def index():
 
     return render_template("index.html", audio_files=audio_files, image_files=image_files)
 
+@app.route("/generate-audio", methods=["POST"])
+def generate_audio():
+    text = request.form.get("text", "")
+    filename = request.form.get("filename", "")
+    voice = request.form.get("voice", "alloy")
+    model = request.form.get("model", "tts-1")
+
+    if not text:
+        return jsonify({"error": "Texto não fornecido"}), 400
+
+    try:
+        speech_file_path = Path("/tmp") / "speech.mp3"
+        response = client.audio.speech.create(
+            model=model,
+            voice=voice,
+            input=text
+        )
+        response.stream_to_file(speech_file_path)
+
+        with open(speech_file_path, "rb") as audio_file:
+            audio_data = audio_file.read()
+    except Exception as e:
+        return jsonify({"error": f"Erro ao converter texto em áudio: {str(e)}"}), 500
+
+    timestamp = datetime.utcnow().strftime("%Y%m%d%H%M%S")
+    if not filename:
+        filename = f"audio_{timestamp}"
+    filename = f"{filename}.mp3"
+
+    try:
+        s3.put_object(
+            Bucket=bucket_name,
+            Key=filename,
+            Body=audio_data,
+            ContentType="audio/mpeg"
+        )
+    except Exception as e:
+        return jsonify({"error": f"Erro ao fazer upload para o bucket S3: {str(e)}"}), 500
+
+    return redirect(url_for("index"))
+
 @app.route("/analyze-image", methods=["POST"])
 def analyze_image():
     if "file" not in request.files:
@@ -89,7 +130,6 @@ def analyze_image():
         return jsonify({"error": f"Erro na análise de imagem: {str(e)}"}), 500
 
     return redirect(url_for("index"))
-
 
 @app.route("/download-audio/<filename>", methods=["GET"])
 def download_audio(filename):
